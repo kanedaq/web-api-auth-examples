@@ -61,6 +61,74 @@ app.get('/login', function(req, res) {
     }));
 });
 
+// スパムとみなされないように、API呼び出し間にsleepを入れる
+const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// アルバム情報と、アルバム内の各トラック情報を出力する
+function get_an_album(access_token, body_an_artists_albums, index) {
+  if (body_an_artists_albums.items.length <= index) {
+    return;
+  }
+
+  const album_id = body_an_artists_albums.items[index].id;
+  var options = {
+    url: 'https://api.spotify.com/v1/albums/' + album_id + '?market=JP',
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  request.get(options, async function(error, response, body) {
+    const indent1 = '\t';
+    const indent2 = '\t\t';
+
+    // アルバム情報を出力する
+    console.log(indent1
+      + '(' + ('00' + (index + 1)).slice(-2) + ') '
+      + body_an_artists_albums.items[index].album_type + ': '
+      + body_an_artists_albums.items[index].name
+      + ' (' + body_an_artists_albums.items[index].release_date + ')');
+    
+    for (ii = 0; ii < body.tracks.items.length; ++ii) {
+      // アルバム内の各トラック情報を出力する
+      console.log(indent2
+        + '[' + ('0' + body.tracks.items[ii].track_number).slice(-2) + '] '
+        + body.tracks.items[ii].name);
+    }
+
+    await _sleep(500);
+    get_an_album(access_token, body_an_artists_albums, index + 1);
+  });
+}
+
+// アーティストの各アルバム情報配下を出力する
+function get_an_artists_albums(access_token, artist_id) {
+  var options = {
+    url: 'https://api.spotify.com/v1/artists/' + artist_id + '/albums?market=JP&limit=50',
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  request.get(options, async function(error, response, body) {
+    await _sleep(500);
+    get_an_album(access_token, body, 0);
+  });
+}
+
+// アーティスト情報配下を出力する
+function get_an_artist(access_token, artist_id) {
+  var options = {
+    url: 'https://api.spotify.com/v1/artists/' + artist_id,
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  request.get(options, async function(error, response, body) {
+    // アーティスト情報を出力する
+    console.log(body.type + ': ' + body.name);
+    console.log('followers: ' + body.followers.total);
+    
+    await _sleep(500);
+    get_an_artists_albums(access_token, artist_id);
+  });
+}
+
 app.get('/callback', function(req, res) {
 
   // your application requests refresh and access tokens
@@ -103,8 +171,14 @@ app.get('/callback', function(req, res) {
         };
 
         // use the access token to access the Spotify Web API
-        request.get(options, function(error, response, body) {
+        request.get(options, async function(error, response, body) {
           console.log(body);
+
+          // データ取得＆出力
+          console.log('--------------------');
+          const artist_id = process.env.ARTIST_ID;
+          await _sleep(500);
+          get_an_artist(access_token, artist_id);
         });
 
         // we can also pass the token to the browser to make requests from there
