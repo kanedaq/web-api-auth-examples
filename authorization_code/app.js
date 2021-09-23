@@ -61,16 +61,50 @@ app.get('/login', function(req, res) {
     }));
 });
 
-// スパムとみなされないように、API呼び出し間にsleepを入れる
+// DoS攻撃とみなされないように、API呼び出し間にsleepを入れる
 const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// アルバム情報と、アルバム内の各トラック情報を出力する
-function get_an_album(access_token, body_an_artists_albums, index) {
-  if (body_an_artists_albums.items.length <= index) {
+// プレイリスト情報を出力する
+function get_a_playlist(access_token, playlist_ids, index) {
+  if (playlist_ids.length <= index) {
     return;
   }
 
-  const album_id = body_an_artists_albums.items[index].id;
+  var options = {
+    url: 'https://api.spotify.com/v1/playlists/' + playlist_ids[index] + '?market=JP',
+    headers: { 'Authorization': 'Bearer ' + access_token },
+    json: true
+  };
+  request.get(options, async function(error, response, body) {
+    const indent = '\t';
+
+    console.log('playlist: ' + body.name)
+    console.log('followers: ' + body.followers.total)
+    for (ii = 0; ii < body.tracks.items.length; ++ii) {
+      // プレイリスト内の各トラック情報を出力する
+      console.log(indent
+        + '(' + ('0' + (ii + 1)).slice(-2) + ') '
+        + body.tracks.items[ii].track.album.name
+        + '[' + ('0' + body.tracks.items[ii].track.track_number).slice(-2) + ']'
+        + ' 〜 ' + body.tracks.items[ii].track.name);
+    }
+
+    await _sleep(500);
+    get_a_playlist(access_token, playlist_ids, index + 1);
+  });
+}
+
+async function get_an_album(access_token, body_an_artists_albums, index) {
+  if (body_an_artists_albums.items.length <= index) {
+    // プレイリスト情報を出力する
+    const playlist_ids = process.env.PLAYLIST_IDS.split(' ');
+    await _sleep(500);
+    get_a_playlist(access_token, playlist_ids, 0);
+    return;
+  }
+
+// アルバム情報と、アルバム内の各トラック情報を出力する
+const album_id = body_an_artists_albums.items[index].id;
   var options = {
     url: 'https://api.spotify.com/v1/albums/' + album_id + '?market=JP',
     headers: { 'Authorization': 'Bearer ' + access_token },
